@@ -1,0 +1,1249 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Игра в кости «10000» (Farkle) — 3D</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto:wght@400;700&display=swap');
+
+    :root {
+      --bg: #0f0f1a;
+      --panel: #1a1a2e;
+      --accent: #e94560;
+      --gold: #f0c14e;
+      --text: #eaeaea;
+      --muted: #8b8ba7;
+      --success: #2ecc71;
+      --danger: #e74c3c;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Roboto', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    header {
+      text-align: center;
+      padding: 1rem;
+      background: linear-gradient(180deg, #16213e 0%, transparent 100%);
+    }
+
+    h1 {
+      font-family: 'Press Start 2P', cursive;
+      font-size: clamp(1rem, 3vw, 1.6rem);
+      color: var(--accent);
+      text-shadow: 0 0 12px rgba(233, 69, 96, 0.5);
+      margin-bottom: 0.4rem;
+    }
+
+    .subtitle { color: var(--muted); font-size: 0.9rem; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 1rem;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 0 1rem 2rem;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+    }
+
+    #canvas-wrap {
+      position: relative;
+      background: radial-gradient(ellipse at center, #1f2a44 0%, #0a0a12 70%);
+      border-radius: 16px;
+      overflow: hidden;
+      height: 420px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 0 60px rgba(0,0,0,0.4);
+      border: 1px solid #2a2a4a;
+    }
+
+    #dice-canvas { width: 100%; height: 100%; display: block; }
+
+    .hud {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .hud-badge {
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(6px);
+      padding: 0.5rem 0.9rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      border: 1px solid #333;
+    }
+
+    .hud-badge strong { color: var(--gold); }
+
+    .panel {
+      background: var(--panel);
+      border-radius: 16px;
+      padding: 1.2rem;
+      border: 1px solid #2a2a4a;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .panel h2 {
+      font-size: 1rem;
+      color: var(--accent);
+      border-bottom: 1px solid #333;
+      padding-bottom: 0.5rem;
+    }
+
+    .scores {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-height: 180px;
+      overflow-y: auto;
+    }
+
+    .player-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.45rem 0.6rem;
+      background: #12121f;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+
+    .player-row.active {
+      outline: 2px solid var(--accent);
+      background: #1e1e32;
+    }
+
+    .player-row.winner { background: #1a3a1a; }
+
+    .turn-info {
+      background: #12121f;
+      border-radius: 10px;
+      padding: 0.8rem;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .turn-info .big {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--gold);
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    button {
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 700;
+      padding: 0.7rem 1rem;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s;
+      flex: 1;
+      min-width: 110px;
+    }
+
+    button:active { transform: scale(0.97); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-roll {
+      background: linear-gradient(135deg, #e94560, #c23a51);
+      color: white;
+      box-shadow: 0 4px 14px rgba(233, 69, 96, 0.4);
+    }
+    .btn-roll:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(233, 69, 96, 0.55); }
+
+    .btn-bank {
+      background: linear-gradient(135deg, #2ecc71, #27ae60);
+      color: white;
+      box-shadow: 0 4px 14px rgba(46, 204, 113, 0.35);
+    }
+
+    .btn-select {
+      background: #2a2a4a;
+      color: var(--text);
+      border: 1px solid #444;
+    }
+    .btn-select.selected {
+      background: #3d2a5a;
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .btn-new {
+      background: transparent;
+      border: 1px solid var(--muted);
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .log {
+      flex: 1;
+      min-height: 100px;
+      max-height: 160px;
+      overflow-y: auto;
+      background: #0d0d18;
+      border-radius: 8px;
+      padding: 0.6rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .log .entry { margin-bottom: 0.3rem; }
+    .log .good { color: var(--success); }
+    .log .bad { color: var(--danger); }
+    .log .info { color: #7eb8ff; }
+
+    .rules-toggle {
+      text-align: center;
+      margin-top: 0.5rem;
+    }
+    .rules-toggle button {
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+      text-decoration: underline;
+      min-width: auto;
+      padding: 0.3rem;
+    }
+
+    #rules-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    #rules-modal.open { display: flex; }
+
+    .modal-content {
+      background: var(--panel);
+      max-width: 560px;
+      max-height: 80vh;
+      overflow-y: auto;
+      border-radius: 16px;
+      padding: 1.5rem;
+      border: 1px solid #333;
+    }
+    .modal-content h3 { color: var(--accent); margin-bottom: 0.8rem; }
+    .modal-content ul { padding-left: 1.2rem; margin: 0.5rem 0; }
+    .modal-content li { margin-bottom: 0.4rem; font-size: 0.9rem; }
+    .modal-content button {
+      margin-top: 1rem;
+      background: var(--accent);
+      color: white;
+      width: 100%;
+    }
+
+    .setup {
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+    }
+    .setup label { font-size: 0.85rem; color: var(--muted); }
+    .setup input, .setup select {
+      background: #12121f;
+      border: 1px solid #333;
+      color: white;
+      padding: 0.5rem;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+
+    .selected-dice {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      min-height: 36px;
+    }
+    .die-chip {
+      width: 32px;
+      height: 32px;
+      background: #fff;
+      color: #111;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 0.95rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .die-chip:hover { transform: scale(1.1); }
+    .die-chip.kept { outline: 2px solid var(--gold); }
+
+    .msg {
+      text-align: center;
+      padding: 0.6rem;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      display: none;
+    }
+    .msg.show { display: block; }
+    .msg.farkle { background: #3a1515; color: #ff6b6b; }
+    .msg.hot { background: #1a3a1a; color: #2ecc71; }
+    .msg.info { background: #152a3a; color: #7eb8ff; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>10000 · Farkle</h1>
+    <p class="subtitle">Классические правила · 3D кубики</p>
+  </header>
+
+  <div class="layout">
+    <div>
+      <div id="canvas-wrap">
+        <canvas id="dice-canvas"></canvas>
+        <div class="hud">
+          <div class="hud-badge">Ход: <strong id="hud-player">—</strong></div>
+          <div class="hud-badge">В раунде: <strong id="hud-turn">0</strong></div>
+        </div>
+      </div>
+
+      <div style="margin-top: 0.8rem; display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+        <div class="selected-dice" id="selected-area" title="Кликните по кубику, чтобы отложить/вернуть"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="side-panel">
+      <!-- Setup screen -->
+      <div id="setup-screen" class="setup">
+        <h2>Новая игра</h2>
+        <label>Количество игроков (1–6)</label>
+        <input type="number" id="num-players" min="1" max="6" value="2">
+        <label>Имена (через запятую, необязательно)</label>
+        <input type="text" id="player-names" placeholder="Аня, Боря, ...">
+        <button class="btn-roll" id="btn-start">Начать игру</button>
+        <div class="rules-toggle">
+          <button id="btn-rules">Правила игры</button>
+        </div>
+      </div>
+
+      <!-- Game screen -->
+      <div id="game-screen" style="display:none; flex-direction:column; gap:1rem; height:100%;">
+        <h2>Счёт</h2>
+        <div class="scores" id="scores-list"></div>
+
+        <div class="turn-info">
+          <div>Текущий раунд: <span class="big" id="turn-score">0</span></div>
+          <div style="margin-top:0.3rem; font-size:0.85rem; color:var(--muted);">
+            Отложено: <span id="kept-score">0</span> · Можно набрать ещё
+          </div>
+        </div>
+
+        <div class="msg" id="status-msg"></div>
+
+        <div class="controls">
+          <button class="btn-roll" id="btn-roll">Бросить</button>
+          <button class="btn-bank" id="btn-bank" disabled>Записать</button>
+        </div>
+
+        <div>
+          <div style="font-size:0.8rem; color:var(--muted); margin-bottom:0.3rem;">Отложенные кубики (клик = вернуть)</div>
+          <div class="selected-dice" id="kept-chips"></div>
+        </div>
+
+        <h2 style="font-size:0.9rem;">Журнал</h2>
+        <div class="log" id="log"></div>
+
+        <button class="btn-new" id="btn-restart">Новая игра</button>
+        <div class="rules-toggle">
+          <button id="btn-rules2">Правила</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="rules-modal">
+    <div class="modal-content">
+      <h3>Правила «10000» (Farkle)</h3>
+      <p>Цель — набрать 10 000 или больше очков. Играют 1–6 человек по очереди.</p>
+      <ul>
+        <li><strong>1</strong> = 100 очков, <strong>5</strong> = 50 очков.</li>
+        <li>Три одинаковых: ×100 от номинала (три 1 = 1000).</li>
+        <li>Четыре / пять / шесть одинаковых — удваивают предыдущую тройку (4× = 2× тройки, 5× = 4× тройки и т.д.).</li>
+        <li>Три пары = 1000.</li>
+        <li>Стрит 1-2-3-4-5 = 500, 2-3-4-5-6 = 500.</li>
+        <li>Полный стрит 1-2-3-4-5-6 = 1500.</li>
+        <li>Шесть единиц — мгновенная победа.</li>
+      </ul>
+      <p><strong>Ход:</strong> бросаете 6 кубиков. Откладываете хотя бы одну scoring-комбинацию, остальные можете перебросить. Если после броска нет ни одной scoring-кости — <em>Farkle</em>, очки раунда сгорают.</p>
+      <p>Можно записать очки только если набрано ≥ 250 за ход. Когда кто-то достигает 10 000, у остальных есть ещё один ход, чтобы побить результат.</p>
+      <p style="font-size:0.85rem; color:var(--muted); margin-top:0.8rem;">Дополнительно: три Farkle подряд = −500. Шесть одинаковых — победа.</p>
+      <button id="btn-close-rules">Закрыть</button>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module">
+    import * as THREE from 'three';
+
+    // ─── Scoring engine ───────────────────────────────────────────────────────
+    function scoreDice(values) {
+      // returns { points, used: Set of indices that form the scoring combination }
+      // We find the maximum-scoring set of dice (greedy but covers all standard combos)
+      const counts = [0,0,0,0,0,0,0];
+      values.forEach(v => counts[v]++);
+      let best = { points: 0, used: new Set() };
+
+      // Full straight 1-6
+      if (counts[1] && counts[2] && counts[3] && counts[4] && counts[5] && counts[6]) {
+        return { points: 1500, used: new Set([0,1,2,3,4,5]) };
+      }
+
+      // Six of a kind → instant win handled outside, but score huge
+      for (let f = 1; f <= 6; f++) {
+        if (counts[f] === 6) {
+          const pts = f === 1 ? 8000 : f * 800; // 6× = 8× triple
+          return { points: pts, used: new Set([0,1,2,3,4,5]), sixOfKind: true };
+        }
+      }
+
+      // Three pairs
+      const pairs = [];
+      for (let f = 1; f <= 6; f++) if (counts[f] === 2) pairs.push(f);
+      if (pairs.length === 3) {
+        return { points: 1000, used: new Set([0,1,2,3,4,5]) };
+      }
+
+      // Small straights
+      if (counts[1] && counts[2] && counts[3] && counts[4] && counts[5] && !counts[6]) {
+        // may leave one extra die
+      }
+
+      // Recursive / greedy scoring of remaining
+      function scoreRemaining(c) {
+        let pts = 0;
+        const usedFaces = [];
+
+        // Multiples of a kind (prefer higher first)
+        for (let f = 6; f >= 1; f--) {
+          if (c[f] >= 3) {
+            let base = f === 1 ? 1000 : f * 100;
+            let mult = 1;
+            if (c[f] === 4) mult = 2;
+            if (c[f] === 5) mult = 4;
+            if (c[f] === 6) mult = 8;
+            pts += base * mult;
+            usedFaces.push({ face: f, count: c[f] });
+            c[f] = 0;
+          }
+        }
+
+        // 1s and 5s
+        if (c[1]) { pts += c[1] * 100; usedFaces.push({ face: 1, count: c[1] }); c[1] = 0; }
+        if (c[5]) { pts += c[5] * 50;  usedFaces.push({ face: 5, count: c[5] }); c[5] = 0; }
+
+        return { pts, usedFaces };
+      }
+
+      // Try straight first if possible
+      const c1 = counts.slice();
+      let straightPts = 0;
+      let straightFaces = [];
+      if (c1[1] && c1[2] && c1[3] && c1[4] && c1[5]) {
+        straightPts = 500;
+        for (let f = 1; f <= 5; f++) { c1[f]--; straightFaces.push(f); }
+        const rest = scoreRemaining(c1);
+        straightPts += rest.pts;
+      }
+
+      const c2 = counts.slice();
+      let straightPts2 = 0;
+      let straightFaces2 = [];
+      if (c2[2] && c2[3] && c2[4] && c2[5] && c2[6]) {
+        straightPts2 = 500;
+        for (let f = 2; f <= 6; f++) { c2[f]--; straightFaces2.push(f); }
+        const rest = scoreRemaining(c2);
+        straightPts2 += rest.pts;
+      }
+
+      const c3 = counts.slice();
+      const normal = scoreRemaining(c3);
+
+      const candidates = [
+        { points: straightPts, faces: straightFaces },
+        { points: straightPts2, faces: straightFaces2 },
+        { points: normal.pts, faces: normal.usedFaces.map(u => u.face) }
+      ];
+      candidates.sort((a,b) => b.points - a.points);
+      const winner = candidates[0];
+
+      // Map faces back to indices (first available)
+      const used = new Set();
+      const avail = values.map((v,i) => ({v,i}));
+      for (const face of winner.faces) {
+        // for multiples we need correct count — rebuild properly
+      }
+
+      // Better: rebuild used set from the winning path
+      function buildUsed(countsOrig, path) {
+        const usedIdx = new Set();
+        const remaining = values.map((v,i) => ({v,i}));
+        const c = countsOrig.slice();
+
+        // Apply the same logic and collect indices
+        // Straight
+        if (path === 's15') {
+          for (let f = 1; f <= 5; f++) {
+            const idx = remaining.findIndex(d => d.v === f);
+            if (idx >= 0) { usedIdx.add(remaining[idx].i); remaining.splice(idx,1); }
+          }
+        } else if (path === 's26') {
+          for (let f = 2; f <= 6; f++) {
+            const idx = remaining.findIndex(d => d.v === f);
+            if (idx >= 0) { usedIdx.add(remaining[idx].i); remaining.splice(idx,1); }
+          }
+        }
+
+        // Multiples + 1s/5s on what's left
+        const leftCounts = [0,0,0,0,0,0,0];
+        remaining.forEach(d => leftCounts[d.v]++);
+
+        for (let f = 6; f >= 1; f--) {
+          if (leftCounts[f] >= 3) {
+            let need = leftCounts[f];
+            for (let k = remaining.length - 1; k >= 0 && need > 0; k--) {
+              if (remaining[k].v === f) {
+                usedIdx.add(remaining[k].i);
+                remaining.splice(k,1);
+                need--;
+              }
+            }
+            leftCounts[f] = 0;
+          }
+        }
+        // singles 1 and 5
+        for (const f of [1,5]) {
+          while (leftCounts[f] > 0) {
+            const idx = remaining.findIndex(d => d.v === f);
+            if (idx >= 0) {
+              usedIdx.add(remaining[idx].i);
+              remaining.splice(idx,1);
+              leftCounts[f]--;
+            } else break;
+          }
+        }
+        return usedIdx;
+      }
+
+      let finalUsed;
+      if (winner === candidates[0] && straightPts >= straightPts2 && straightPts >= normal.pts) {
+        finalUsed = buildUsed(counts, 's15');
+      } else if (winner === candidates[1] || (straightPts2 > normal.pts)) {
+        finalUsed = buildUsed(counts, 's26');
+      } else {
+        finalUsed = buildUsed(counts, 'normal');
+      }
+
+      // Safety: if points > 0 but used empty, force any 1s and 5s
+      if (winner.points > 0 && finalUsed.size === 0) {
+        values.forEach((v,i) => { if (v === 1 || v === 5) finalUsed.add(i); });
+      }
+
+      return { points: winner.points, used: finalUsed };
+    }
+
+    // Simpler reliable scorer that returns points + which dice contribute
+    function evaluate(values) {
+      if (!values.length) return { points: 0, scoringIndices: [] };
+
+      const n = values.length;
+      const counts = Array(7).fill(0);
+      values.forEach(v => counts[v]++);
+
+      // Check special full-set combinations first
+      if (n === 6) {
+        if (counts[1] === 6) return { points: 10000, scoringIndices: [0,1,2,3,4,5], instantWin: true };
+        // six of a kind
+        for (let f = 1; f <= 6; f++) {
+          if (counts[f] === 6) {
+            const base = f === 1 ? 1000 : f * 100;
+            return { points: base * 8, scoringIndices: [0,1,2,3,4,5], sixOfKind: true };
+          }
+        }
+        // three pairs
+        if (Object.values(counts).filter(c => c === 2).length === 3) {
+          return { points: 1000, scoringIndices: [0,1,2,3,4,5] };
+        }
+        // full straight
+        if (counts[1] && counts[2] && counts[3] && counts[4] && counts[5] && counts[6]) {
+          return { points: 1500, scoringIndices: [0,1,2,3,4,5] };
+        }
+      }
+
+      // Small straights (exactly the 5 dice)
+      if (n >= 5) {
+        if (counts[1] && counts[2] && counts[3] && counts[4] && counts[5]) {
+          // take the straight + remaining 1/5
+          const idx = [];
+          const taken = Array(7).fill(0);
+          values.forEach((v,i) => {
+            if (v >= 1 && v <= 5 && taken[v] === 0) { idx.push(i); taken[v] = 1; }
+          });
+          // remaining singles
+          let extra = 0;
+          values.forEach((v,i) => {
+            if (!idx.includes(i)) {
+              if (v === 1) { extra += 100; idx.push(i); }
+              else if (v === 5) { extra += 50; idx.push(i); }
+            }
+          });
+          return { points: 500 + extra, scoringIndices: idx };
+        }
+        if (counts[2] && counts[3] && counts[4] && counts[5] && counts[6]) {
+          const idx = [];
+          const taken = Array(7).fill(0);
+          values.forEach((v,i) => {
+            if (v >= 2 && v <= 6 && taken[v] === 0) { idx.push(i); taken[v] = 1; }
+          });
+          let extra = 0;
+          values.forEach((v,i) => {
+            if (!idx.includes(i)) {
+              if (v === 1) { extra += 100; idx.push(i); }
+              else if (v === 5) { extra += 50; idx.push(i); }
+            }
+          });
+          return { points: 500 + extra, scoringIndices: idx };
+        }
+      }
+
+      // Standard: of-a-kind + 1s + 5s
+      let points = 0;
+      const scoringIndices = [];
+      const used = Array(n).fill(false);
+
+      for (let f = 1; f <= 6; f++) {
+        if (counts[f] >= 3) {
+          let base = f === 1 ? 1000 : f * 100;
+          let mult = 1;
+          if (counts[f] === 4) mult = 2;
+          if (counts[f] === 5) mult = 4;
+          if (counts[f] === 6) mult = 8;
+          points += base * mult;
+          // mark all of them
+          let need = counts[f];
+          for (let i = 0; i < n && need; i++) {
+            if (values[i] === f && !used[i]) {
+              used[i] = true;
+              scoringIndices.push(i);
+              need--;
+            }
+          }
+        }
+      }
+      // remaining 1s and 5s
+      for (let i = 0; i < n; i++) {
+        if (used[i]) continue;
+        if (values[i] === 1) { points += 100; scoringIndices.push(i); used[i] = true; }
+        else if (values[i] === 5) { points += 50; scoringIndices.push(i); used[i] = true; }
+      }
+
+      return { points, scoringIndices };
+    }
+
+    // ─── 3D Dice ──────────────────────────────────────────────────────────────
+    const canvas = document.getElementById('dice-canvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+    camera.position.set(0, 12, 8);
+    camera.lookAt(0, 0, 0);
+
+    // Lights
+    const ambient = new THREE.AmbientLight(0x404060, 1.2);
+    scene.add(ambient);
+    const dir = new THREE.DirectionalLight(0xffffff, 1.4);
+    dir.position.set(5, 12, 6);
+    dir.castShadow = true;
+    dir.shadow.mapSize.set(1024, 1024);
+    scene.add(dir);
+    const fill = new THREE.DirectionalLight(0x8899ff, 0.4);
+    fill.position.set(-4, 4, -4);
+    scene.add(fill);
+
+    // Table
+    const tableGeo = new THREE.CircleGeometry(7, 64);
+    const tableMat = new THREE.MeshStandardMaterial({ color: 0x1a3a2a, roughness: 0.85 });
+    const table = new THREE.Mesh(tableGeo, tableMat);
+    table.rotation.x = -Math.PI / 2;
+    table.receiveShadow = true;
+    scene.add(table);
+
+    // Dice textures (pips). Index 1..6
+    function makeDieTexture(face) {
+      const size = 256;
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#f4f1ea';
+      ctx.fillRect(0, 0, size, size);
+      ctx.strokeStyle = '#d0ccc4';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(8, 8, size - 16, size - 16);
+
+      ctx.fillStyle = face === 1 ? '#c0392b' : '#1a1a1a';
+      const pip = (x, y, r = 22) => {
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+      };
+      const s = size;
+      const positions = {
+        1: [[0.5, 0.5]],
+        2: [[0.28, 0.28], [0.72, 0.72]],
+        3: [[0.28, 0.28], [0.5, 0.5], [0.72, 0.72]],
+        4: [[0.28, 0.28], [0.72, 0.28], [0.28, 0.72], [0.72, 0.72]],
+        5: [[0.28, 0.28], [0.72, 0.28], [0.5, 0.5], [0.28, 0.72], [0.72, 0.72]],
+        6: [[0.28, 0.22], [0.72, 0.22], [0.28, 0.5], [0.72, 0.5], [0.28, 0.78], [0.72, 0.78]]
+      };
+      (positions[face] || []).forEach(([x, y]) => pip(x * s, y * s, face === 6 ? 18 : 22));
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 8;
+      return tex;
+    }
+
+    const faceTextures = [null];
+    for (let f = 1; f <= 6; f++) faceTextures.push(makeDieTexture(f));
+
+    const WORLD_UP = new THREE.Vector3(0, 1, 0);
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0xf4f1ea,
+      roughness: 0.45,
+      metalness: 0.05
+    });
+
+    function makeFaceMaterial(face) {
+      return new THREE.MeshStandardMaterial({
+        map: faceTextures[face],
+        roughness: 0.4,
+        metalness: 0.04,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1
+      });
+    }
+
+    /**
+     * Die = Group with a solid cube + 6 planes.
+     * The TOP plane is always local +Y. At rest we only yaw around Y,
+     * so the top plane is always the world-up face. The rolled number
+     * is painted onto that plane — no BoxGeometry material-index guessing.
+     */
+    function createDie() {
+      const group = new THREE.Group();
+
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), bodyMat);
+      body.castShadow = true;
+      body.receiveShadow = true;
+      group.add(body);
+
+      const placements = {
+        top:    { pos: [0, 0.501, 0],  euler: [-Math.PI / 2, 0, 0] },
+        bottom: { pos: [0, -0.501, 0], euler: [ Math.PI / 2, 0, 0] },
+        front:  { pos: [0, 0, 0.501],  euler: [0, 0, 0] },
+        back:   { pos: [0, 0, -0.501], euler: [0, Math.PI, 0] },
+        right:  { pos: [0.501, 0, 0],  euler: [0, Math.PI / 2, 0] },
+        left:   { pos: [-0.501, 0, 0], euler: [0, -Math.PI / 2, 0] }
+      };
+
+      const faces = {};
+      for (const [name, p] of Object.entries(placements)) {
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(0.98, 0.98), makeFaceMaterial(1));
+        mesh.position.set(...p.pos);
+        mesh.rotation.set(...p.euler);
+        group.add(mesh);
+        faces[name] = mesh;
+      }
+
+      return { group, faces };
+    }
+
+    function yawQuat(yaw) {
+      return new THREE.Quaternion().setFromAxisAngle(WORLD_UP, yaw);
+    }
+
+    function applyDieValue(die, value, yaw = 0) {
+      const v = Math.max(1, Math.min(6, value | 0));
+      const opp = 7 - v;
+      const rest = [];
+      for (let n = 1; n <= 6; n++) if (n !== v && n !== opp) rest.push(n);
+
+      const setMap = (faceMesh, n) => {
+        faceMesh.material.map = faceTextures[n];
+        faceMesh.material.needsUpdate = true;
+      };
+      setMap(die.faces.top, v);
+      setMap(die.faces.bottom, opp);
+      setMap(die.faces.front, rest[0]);
+      setMap(die.faces.back, rest[1]);
+      setMap(die.faces.right, rest[2]);
+      setMap(die.faces.left, rest[3]);
+
+      die.value = v;
+      die.targetQuat = yawQuat(yaw);
+      die.mesh.quaternion.copy(die.targetQuat);
+    }
+
+    const dice = [];
+    const DICE_COUNT = 6;
+    for (let i = 0; i < DICE_COUNT; i++) {
+      const { group, faces } = createDie();
+      group.position.set((i - 2.5) * 1.4, 0.5, 0);
+      scene.add(group);
+      const die = {
+        mesh: group,
+        faces,
+        value: 1,
+        targetQuat: yawQuat(0),
+        velocity: new THREE.Vector3(),
+        angular: new THREE.Vector3(),
+        settling: false
+      };
+      applyDieValue(die, i + 1, 0);
+      dice.push(die);
+    }
+
+    function resize() {
+      const wrap = document.getElementById('canvas-wrap');
+      const w = wrap.clientWidth;
+      const h = wrap.clientHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    let animating = false;
+    let animStart = 0;
+    let animDuration = 1400;
+
+    function rollDice3D(values, onDone) {
+      animating = true;
+      animStart = performance.now();
+      values.forEach((v, i) => {
+        const d = dice[i];
+        const yaw = Math.random() * Math.PI * 2;
+        applyDieValue(d, v, yaw);
+        d.angular.set(
+          (Math.random() - 0.5) * 25,
+          (Math.random() - 0.5) * 25,
+          (Math.random() - 0.5) * 25
+        );
+        d.velocity.set(
+          (Math.random() - 0.5) * 4,
+          6 + Math.random() * 4,
+          (Math.random() - 0.5) * 3
+        );
+        d.mesh.position.set((i - 2.5) * 1.3 + (Math.random() - 0.5), 2 + Math.random(), (Math.random() - 0.5) * 1.5);
+        d.mesh.quaternion.identity();
+        d.settling = false;
+      });
+      for (let i = 0; i < DICE_COUNT; i++) {
+        dice[i].mesh.visible = i < values.length;
+      }
+
+      function finish() {
+        animating = false;
+        values.forEach((v, i) => {
+          const d = dice[i];
+          d.mesh.quaternion.copy(d.targetQuat);
+          d.mesh.position.set((i - (values.length - 1) / 2) * 1.35, 0.5, 0);
+          d.angular.set(0, 0, 0);
+          d.velocity.set(0, 0, 0);
+        });
+        if (onDone) onDone();
+      }
+
+      setTimeout(finish, animDuration + 80);
+    }
+
+    const _spinQ = new THREE.Quaternion();
+    const _axisX = new THREE.Vector3(1, 0, 0);
+    const _axisY = new THREE.Vector3(0, 1, 0);
+    const _axisZ = new THREE.Vector3(0, 0, 1);
+
+    function animate(t) {
+      requestAnimationFrame(animate);
+      const dt = Math.min(0.033, 0.016);
+
+      if (animating) {
+        const elapsed = t - animStart;
+        const progress = Math.min(1, elapsed / animDuration);
+        const visibleCount = dice.filter(x => x.mesh.visible).length;
+
+        dice.forEach((d, i) => {
+          if (!d.mesh.visible) return;
+
+          // physics
+          d.velocity.y -= 18 * dt;
+          d.mesh.position.addScaledVector(d.velocity, dt);
+
+          if (d.mesh.position.y < 0.5) {
+            d.mesh.position.y = 0.5;
+            d.velocity.y *= -0.45;
+            d.velocity.x *= 0.8;
+            d.velocity.z *= 0.8;
+            d.angular.multiplyScalar(0.7);
+            if (Math.abs(d.velocity.y) < 0.8) {
+              d.velocity.set(0, 0, 0);
+            }
+          }
+
+          // spin via quaternion (avoid mixing with Euler rotation)
+          if (progress < 0.7) {
+            _spinQ.setFromAxisAngle(_axisX, d.angular.x * dt);
+            d.mesh.quaternion.premultiply(_spinQ);
+            _spinQ.setFromAxisAngle(_axisY, d.angular.y * dt);
+            d.mesh.quaternion.premultiply(_spinQ);
+            _spinQ.setFromAxisAngle(_axisZ, d.angular.z * dt);
+            d.mesh.quaternion.premultiply(_spinQ);
+          }
+
+          // settle to final face + position
+          if (progress > 0.55) {
+            const k = (progress - 0.55) / 0.45;
+            d.mesh.quaternion.slerp(d.targetQuat, 0.12 + k * 0.35);
+            const targetX = (i - (visibleCount - 1) / 2) * 1.35;
+            d.mesh.position.x += (targetX - d.mesh.position.x) * (0.1 + k * 0.2);
+            d.mesh.position.z += (0 - d.mesh.position.z) * (0.1 + k * 0.2);
+            d.mesh.position.y += (0.5 - d.mesh.position.y) * (0.12 + k * 0.2);
+          }
+        });
+      } else {
+        dice.forEach((d, i) => {
+          if (!d.mesh.visible) return;
+          d.mesh.position.y = 0.5 + Math.sin(t * 0.002 + i) * 0.02;
+        });
+      }
+
+      renderer.render(scene, camera);
+    }
+    requestAnimationFrame(animate);
+
+    // ─── Game state ───────────────────────────────────────────────────────────
+    const TARGET = 10000;
+    const MIN_BANK = 250;
+
+    let players = [];
+    let current = 0;
+    let turnScore = 0;
+    let keptScore = 0;          // already banked this turn from previous rolls
+    let availableDice = 6;
+    let currentValues = [];     // last roll
+    let selected = new Set();   // indices selected from current roll
+    let farkleStreak = [];      // per player
+    let gameOver = false;
+    let finalRound = false;
+    let finalStarter = -1;
+
+    const $ = id => document.getElementById(id);
+
+    function log(msg, cls = '') {
+      const el = $('log');
+      const div = document.createElement('div');
+      div.className = 'entry ' + cls;
+      div.textContent = msg;
+      el.prepend(div);
+    }
+
+    function showMsg(text, type) {
+      const m = $('status-msg');
+      m.textContent = text;
+      m.className = 'msg show ' + type;
+    }
+    function hideMsg() {
+      $('status-msg').className = 'msg';
+    }
+
+    function updateUI() {
+      $('hud-player').textContent = players[current]?.name || '—';
+      $('hud-turn').textContent = turnScore + keptScore;
+      $('turn-score').textContent = turnScore + keptScore;
+      $('kept-score').textContent = keptScore;
+
+      const list = $('scores-list');
+      list.innerHTML = '';
+      players.forEach((p, i) => {
+        const row = document.createElement('div');
+        row.className = 'player-row' + (i === current ? ' active' : '') + (p.score >= TARGET ? ' winner' : '');
+        row.innerHTML = `<span>${p.name}</span><strong>${p.score}</strong>`;
+        list.appendChild(row);
+      });
+
+      // chips for current selection
+      const area = $('selected-area');
+      area.innerHTML = '';
+      currentValues.forEach((v, i) => {
+        const chip = document.createElement('div');
+        chip.className = 'die-chip' + (selected.has(i) ? ' kept' : '');
+        chip.textContent = v;
+        chip.onclick = () => toggleSelect(i);
+        area.appendChild(chip);
+      });
+
+      const kept = $('kept-chips');
+      // we don't keep visual history of previous kept dice beyond score
+    }
+
+    function toggleSelect(i) {
+      if (animating || gameOver) return;
+      if (selected.has(i)) selected.delete(i);
+      else selected.add(i);
+      updateUI();
+      updateButtons();
+    }
+
+    function updateButtons() {
+      const canRoll = !animating && !gameOver && availableDice > 0;
+      $('btn-roll').disabled = !canRoll;
+
+      // can bank if we have selection that scores and total >= MIN or already have points
+      let selPoints = 0;
+      if (selected.size) {
+        const vals = [...selected].map(i => currentValues[i]);
+        selPoints = evaluate(vals).points;
+      }
+      const totalThisTurn = keptScore + turnScore + selPoints;
+      const canBank = !animating && !gameOver && selected.size > 0 && selPoints > 0 &&
+        (totalThisTurn >= MIN_BANK || players[current].score > 0);
+      // actually classic rule: must score at least 250 to open, then any amount
+      // but for simplicity we require the banked amount this turn >= 250 if score was 0
+      $('btn-bank').disabled = !(selected.size > 0 && selPoints > 0 && !animating);
+    }
+
+    function startGame() {
+      const n = Math.min(6, Math.max(1, parseInt($('num-players').value) || 2));
+      const namesRaw = $('player-names').value.split(',').map(s => s.trim()).filter(Boolean);
+      players = [];
+      for (let i = 0; i < n; i++) {
+        players.push({
+          name: namesRaw[i] || `Игрок ${i + 1}`,
+          score: 0,
+          farkles: 0
+        });
+      }
+      current = 0;
+      turnScore = 0;
+      keptScore = 0;
+      availableDice = 6;
+      currentValues = [];
+      selected.clear();
+      gameOver = false;
+      finalRound = false;
+      $('setup-screen').style.display = 'none';
+      $('game-screen').style.display = 'flex';
+      log('Игра началась! Удачи.', 'info');
+      showMsg(`${players[0].name}, ваш ход. Бросайте!`, 'info');
+      updateUI();
+      updateButtons();
+      // show all dice idle
+      dice.forEach((d, i) => {
+        d.mesh.visible = true;
+        d.mesh.position.set((i - 2.5) * 1.35, 0.5, 0);
+        applyDieValue(d, 1, 0);
+      });
+    }
+
+    function nextPlayer() {
+      turnScore = 0;
+      keptScore = 0;
+      availableDice = 6;
+      currentValues = [];
+      selected.clear();
+      current = (current + 1) % players.length;
+
+      if (finalRound && current === finalStarter) {
+        endGame();
+        return;
+      }
+
+      showMsg(`${players[current].name}, ваш ход`, 'info');
+      updateUI();
+      updateButtons();
+      dice.forEach((d, i) => {
+        d.mesh.visible = true;
+        d.mesh.position.set((i - 2.5) * 1.35, 0.5, 0);
+      });
+    }
+
+    function endGame() {
+      gameOver = true;
+      const sorted = [...players].sort((a, b) => b.score - a.score);
+      const winner = sorted[0];
+      showMsg(`🏆 Победитель: ${winner.name} с ${winner.score} очками!`, 'hot');
+      log(`Игра окончена. Победитель — ${winner.name} (${winner.score})`, 'good');
+      $('btn-roll').disabled = true;
+      $('btn-bank').disabled = true;
+      updateUI();
+    }
+
+    function doRoll() {
+      if (animating || gameOver) return;
+
+      // If player had selected dice, first bank those into keptScore and reduce available
+      if (selected.size > 0) {
+        const vals = [...selected].map(i => currentValues[i]);
+        const ev = evaluate(vals);
+        if (ev.points === 0) {
+          showMsg('Выбранные кубики не дают очков!', 'farkle');
+          return;
+        }
+        keptScore += ev.points;
+        turnScore = 0;
+        availableDice -= selected.size;
+        if (availableDice === 0) {
+          // Hot dice — all dice score, roll all 6 again
+          availableDice = 6;
+          log(`${players[current].name} собрал все кубики! Hot dice!`, 'good');
+        }
+        selected.clear();
+      }
+
+      // Generate random values
+      const values = [];
+      for (let i = 0; i < availableDice; i++) {
+        values.push(1 + Math.floor(Math.random() * 6));
+      }
+      currentValues = values;
+      selected.clear();
+
+      hideMsg();
+      $('btn-roll').disabled = true;
+      $('btn-bank').disabled = true;
+
+      rollDice3D(values, () => {
+        const ev = evaluate(values);
+        if (ev.points === 0) {
+          // Farkle!
+          players[current].farkles++;
+          log(`${players[current].name}: Farkle! ${values.join('-')}`, 'bad');
+          showMsg('💀 Farkle! Очки раунда сгорели', 'farkle');
+          if (players[current].farkles >= 3) {
+            players[current].score = Math.max(0, players[current].score - 500);
+            players[current].farkles = 0;
+            log(`${players[current].name} три Farkle подряд → −500`, 'bad');
+          }
+          turnScore = 0;
+          keptScore = 0;
+          setTimeout(() => nextPlayer(), 1800);
+        } else {
+          players[current].farkles = 0;
+          turnScore = ev.points; // temporary, until selection
+          // Auto-select all scoring dice for convenience
+          selected = new Set(ev.scoringIndices);
+          log(`${players[current].name} выбросил ${values.join('-')} → ${ev.points}`, 'info');
+          if (ev.instantWin || (ev.sixOfKind && values.every(v => v === values[0]))) {
+            showMsg('🎉 Шесть одинаковых! Мгновенная победа!', 'hot');
+            players[current].score = Math.max(players[current].score, TARGET);
+            setTimeout(endGame, 1500);
+            return;
+          }
+          showMsg(`Набрано ${ev.points}. Отложите кубики и бросайте дальше или запишите.`, 'info');
+          updateUI();
+          updateButtons();
+        }
+      });
+    }
+
+    function doBank() {
+      if (animating || gameOver || selected.size === 0) return;
+      const vals = [...selected].map(i => currentValues[i]);
+      const ev = evaluate(vals);
+      if (ev.points === 0) {
+        showMsg('Нельзя записать нулевые кубики', 'farkle');
+        return;
+      }
+
+      const total = keptScore + ev.points;
+      if (players[current].score === 0 && total < MIN_BANK) {
+        showMsg(`Нужно минимум ${MIN_BANK} очков, чтобы открыться`, 'farkle');
+        return;
+      }
+
+      players[current].score += total;
+      log(`${players[current].name} записывает ${total} (всего ${players[current].score})`, 'good');
+      showMsg(`+${total} → ${players[current].score}`, 'hot');
+
+      // Check for reaching target
+      if (!finalRound && players[current].score >= TARGET) {
+        finalRound = true;
+        finalStarter = current;
+        log(`${players[current].name} набрал ${TARGET}+! Финальный круг.`, 'info');
+        showMsg(`${players[current].name} достиг 10 000! У остальных по одному ходу.`, 'info');
+      }
+
+      setTimeout(() => nextPlayer(), 1200);
+    }
+
+    // Event listeners
+    $('btn-start').onclick = startGame;
+    $('btn-roll').onclick = doRoll;
+    $('btn-bank').onclick = doBank;
+    $('btn-restart').onclick = () => {
+      $('game-screen').style.display = 'none';
+      $('setup-screen').style.display = 'flex';
+      $('log').innerHTML = '';
+    };
+    $('btn-rules').onclick = $('btn-rules2').onclick = () => {
+      $('rules-modal').classList.add('open');
+    };
+    $('btn-close-rules').onclick = () => $('rules-modal').classList.remove('open');
+    $('rules-modal').onclick = e => {
+      if (e.target === $('rules-modal')) $('rules-modal').classList.remove('open');
+    };
+
+    // Initial idle pose — show faces 1..6 on top
+    dice.forEach((d, i) => {
+      d.mesh.position.set((i - 2.5) * 1.35, 0.5, 0);
+      applyDieValue(d, (i % 6) + 1, 0);
+    });
+  </script>
+</body>
+</html>
